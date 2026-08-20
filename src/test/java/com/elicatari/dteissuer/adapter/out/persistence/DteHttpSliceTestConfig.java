@@ -20,6 +20,7 @@ import org.springframework.context.annotation.Import;
     JpaFolioRangeRepository.class,
     JpaIdempotencyStore.class,
     SpringDomainEventPublisher.class,
+    DteIssuedMetricsListener.class,
     TransactionalIssueDteUseCase.class,
     SecurityConfig.class,
     TenantContextFilter.class,
