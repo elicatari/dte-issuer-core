@@ -17,8 +17,9 @@ jobs:
       - name: Verify
         run: ./mvnw -B verify
 
+  # Mismo evento que verify: un gate solo en push a main no bloquea el merge.
+  # PIT, no verify: el umbral de mutación no re-ejecuta IT ni jacoco:check.
   mutation:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,4 +29,4 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Mutation
-        run: ./mvnw -B -Pmutation verify
+        run: ./mvnw -B -Pmutation test-compile org.pitest:pitest-maven:mutationCoverage

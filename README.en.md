@@ -113,7 +113,7 @@ metrics: `dte_issued_total`, `dte_folio_reservation_seconds`,
 - PostgreSQL + Flyway, shared schema + `tenant_id` + RLS
 - RabbitMQ (outbox + publish `DteIssued` after commit)
 - ArchUnit, Testcontainers, jqwik; JaCoCo 80% lines / 70% branches enforced on domain + application; `adapter/**` 70% / 40% (lower: more wiring branches). `shared/**` is out of the gate (JWT/MDC filters); the gate does not silently measure only the easy part.
-- PIT mutation on `domain` in CI (`./mvnw -B -Pmutation verify`, separate job on `main`, 70% threshold).
+- PIT mutation on `domain` in CI (`./mvnw -B -Pmutation test-compile org.pitest:pitest-maven:mutationCoverage`, job parallel to `verify` on PR and `push`, 70% threshold). Not bound to `verify`: JaCoCo and PIT do not share a lifecycle.
 
 ## How to run
 

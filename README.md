@@ -112,7 +112,7 @@ outbox **no** pone `/actuator/health` en DOWN.
 - PostgreSQL + Flyway, schema compartido + `tenant_id` + RLS
 - RabbitMQ (outbox + publish `DteIssued` tras commit)
 - ArchUnit, Testcontainers, jqwik; JaCoCo 80% líneas / 70% ramas forzado sobre dominio + aplicación; `adapter/**` 70% / 40% (más bajo: más ramas de wiring). `shared/**` queda fuera del umbral (filtros JWT/MDC); no es que el gate solo mida lo fácil sin decirlo.
-- Mutación PIT sobre `domain` en CI (`./mvnw -B -Pmutation verify`, job aparte en `main`, umbral 70%).
+- Mutación PIT sobre `domain` en CI (`./mvnw -B -Pmutation test-compile org.pitest:pitest-maven:mutationCoverage`, job paralelo a `verify` en PR y `push`, umbral 70%). No se ata a `verify`: JaCoCo y PIT no comparten lifecycle.
 
 ## Cómo levantar
 

@@ -269,18 +269,16 @@
   </build>
 
   <profiles>
-    <!-- Job aparte: ./mvnw -B -Pmutation verify. Umbral sobre domain; rompe ese job. -->
+    <!--
+      Gate aparte, no un verify disfrazado.
+      CI y local: ./mvnw -B -Pmutation test-compile org.pitest:pitest-maven:mutationCoverage
+      No se ata a verify ni se pisa el argLine de Surefire: JaCoCo y PIT no
+      comparten lifecycle. PIT lanza su propia JVM (parseSurefireConfig=false).
+    -->
     <profile>
       <id>mutation</id>
       <build>
         <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-surefire-plugin</artifactId>
-            <configuration>
-              <argLine>-Duser.timezone=UTC</argLine>
-            </configuration>
-          </plugin>
           <plugin>
             <groupId>org.pitest</groupId>
             <artifactId>pitest-maven</artifactId>
@@ -309,21 +307,18 @@
                 <param>**.*ArchTest</param>
                 <param>**.*PropertyTest</param>
               </excludedTestClasses>
+              <!--
+                JaCoCo prepare-agent escribe la propiedad Maven argLine; PIT la
+                lee por defecto. Aquí se fija el JVM del minion, no el de Surefire.
+              -->
+              <parseSurefireConfig>false</parseSurefireConfig>
+              <argLine>-Duser.timezone=UTC</argLine>
               <mutationThreshold>${pitest.mutation.threshold}</mutationThreshold>
               <outputFormats>
                 <outputFormat>XML</outputFormat>
                 <outputFormat>HTML</outputFormat>
               </outputFormats>
             </configuration>
-            <executions>
-              <execution>
-                <id>mutation-coverage</id>
-                <phase>verify</phase>
-                <goals>
-                  <goal>mutationCoverage</goal>
-                </goals>
-              </execution>
-            </executions>
           </plugin>
         </plugins>
       </build>
