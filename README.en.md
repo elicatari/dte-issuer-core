@@ -66,6 +66,8 @@ Scope `(tenant_id, idempotency_key)` + hash of the canonicalized body. Required.
 
 The race is resolved by database uniqueness, not by a prior `if exists`.
 
+An in-progress reservation abandoned (`created_at` older than `dte.idempotency.in-progress-ttl-ms`, 60 s by default) can be claimed again: same body issues; a different body is still 409.
+
 ## Decisions
 
 | Topic | Decision |
@@ -110,7 +112,8 @@ metrics: `dte_issued_total`, `dte_folio_reservation_seconds`,
 - Actuator: public health; authenticated Prometheus
 - PostgreSQL + Flyway, shared schema + `tenant_id` + RLS
 - RabbitMQ (outbox + publish `DteIssued` after commit)
-- ArchUnit, Testcontainers, jqwik; JaCoCo 80% lines / 70% branches enforced on domain + application
+- ArchUnit, Testcontainers, jqwik; JaCoCo 80% lines / 70% branches enforced on domain + application; `adapter/**` 70% / 40% (lower: more wiring branches). `shared/**` is out of the gate (JWT/MDC filters); the gate does not silently measure only the easy part.
+- PIT mutation on `domain` in CI (`./mvnw -B -Pmutation verify`, separate job on `main`, 70% threshold).
 
 ## How to run
 
@@ -118,6 +121,8 @@ metrics: `dte_issued_total`, `dte_folio_reservation_seconds`,
 cp .env.example .env
 docker compose up --build
 ```
+
+The `api` image does not run as root (`id -u` is 10001) and declares `HEALTHCHECK` in the Dockerfile (Compose still checks readiness the same way).
 
 When the API, Postgres, Keycloak and Rabbit are healthy (`dte-issued-echo` is a
 log/echo of `dte.issued`, not a second service):

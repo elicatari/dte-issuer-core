@@ -67,7 +67,8 @@ class FlywayV1Test {
                         connection.prepareStatement("select column_name from information_schema.columns "
                                 + "where table_name = 'idempotency_keys' order by column_name");
                 ResultSet result = statement.executeQuery()) {
-            assertThat(columnValues(result, 1)).contains("request_hash", "dte_id", "idempotency_key", "tenant_id");
+            assertThat(columnValues(result, 1))
+                    .contains("request_hash", "dte_id", "idempotency_key", "tenant_id", "created_at");
         }
     }
 
@@ -239,6 +240,17 @@ class FlywayV1Test {
                             "next_attempt_at",
                             "occurred_at",
                             "published_at");
+        }
+    }
+
+    @Test
+    void v5IdempotencyKeysHaveCreatedAt() throws SQLException {
+        try (Connection connection = app();
+                PreparedStatement statement =
+                        connection.prepareStatement("select column_name from information_schema.columns "
+                                + "where table_name = 'idempotency_keys' order by column_name");
+                ResultSet result = statement.executeQuery()) {
+            assertThat(columnValues(result, 1)).contains("created_at");
         }
     }
 

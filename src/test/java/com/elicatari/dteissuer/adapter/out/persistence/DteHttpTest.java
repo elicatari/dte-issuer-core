@@ -9,10 +9,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.elicatari.dteissuer.domain.DocumentType;
+import com.elicatari.dteissuer.domain.Rut;
 import com.elicatari.dteissuer.shared.ProblemTypes;
 import com.elicatari.dteissuer.shared.RequestMdc;
 import com.jayway.jsonpath.JsonPath;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -129,6 +141,51 @@ class DteHttpTest extends AbstractJpaPostgresTest {
     }
 
     @Test
+    void expiredInProgressSameBodyIssuesAgainAndDifferentBodyStays409() throws Exception {
+        String tenant = "idem-ttl";
+        insertFolioRange(dataSource, tenant, 1, 8);
+        Instant abandoned = Instant.now().minus(Duration.ofMinutes(2));
+        String sameHash = canonicalHash("12.345.678-5", 1000);
+
+        insertInProgressKey(tenant, "ttl-same", sameHash, abandoned);
+        mockMvc.perform(post("/api/v1/dte")
+                        .with(jwt().jwt(jwt -> jwt.claim("tenant_id", tenant)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "ttl-same")
+                        .content(BODY))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.folio").value(1));
+
+        insertInProgressKey(tenant, "ttl-other", sameHash, abandoned);
+        mockMvc.perform(post("/api/v1/dte")
+                        .with(jwt().jwt(jwt -> jwt.claim("tenant_id", tenant)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "ttl-other")
+                        .content(OTHER_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value(ProblemTypes.IDEMPOTENCY_CONFLICT.toString()));
+
+        mockMvc.perform(get("/api/v1/dte").with(jwt().jwt(jwt -> jwt.claim("tenant_id", tenant))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void recentInProgressSameBodyStays409() throws Exception {
+        String tenant = "idem-fresh";
+        insertFolioRange(dataSource, tenant, 1, 8);
+        insertInProgressKey(tenant, "fresh-key", canonicalHash("12.345.678-5", 1000), Instant.now());
+
+        mockMvc.perform(post("/api/v1/dte")
+                        .with(jwt().jwt(jwt -> jwt.claim("tenant_id", tenant)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "fresh-key")
+                        .content(BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value(ProblemTypes.IDEMPOTENCY_IN_PROGRESS.toString()));
+    }
+
+    @Test
     void postWithoutCafIs409FolioExhausted() throws Exception {
         mockMvc.perform(post("/api/v1/dte")
                         .with(jwt().jwt(jwt -> jwt.claim("tenant_id", "gamma")))
@@ -224,5 +281,33 @@ class DteHttpTest extends AbstractJpaPostgresTest {
             Thread.onSpinWait();
         }
         throw new AssertionError("la clave siguió en curso; no hubo segundo folio pero el ganador no releyó");
+    }
+
+    private void insertInProgressKey(String tenantId, String key, String requestHash, Instant createdAt)
+            throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            TenantRls.bind(connection, tenantId);
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "insert into idempotency_keys (tenant_id, idempotency_key, request_hash, dte_id, created_at) "
+                            + "values (?, ?, ?, null, ?)")) {
+                statement.setString(1, tenantId);
+                statement.setString(2, key);
+                statement.setString(3, requestHash);
+                statement.setObject(4, Timestamp.from(createdAt));
+                statement.executeUpdate();
+            }
+            connection.commit();
+        }
+    }
+
+    private static String canonicalHash(String rut, long neto) {
+        String canonical = DocumentType.BOLETA_39.siiCode() + "\n" + Rut.parse(rut).value() + "\n" + neto;
+        try {
+            byte[] hashed = MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashed);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 no disponible", ex);
+        }
     }
 }

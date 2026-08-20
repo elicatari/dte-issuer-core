@@ -60,6 +60,8 @@ management:
       enabled: true
 
 dte:
+  idempotency:
+    in-progress-ttl-ms: 60000
   outbox:
     poller:
       delay-ms: 2000
