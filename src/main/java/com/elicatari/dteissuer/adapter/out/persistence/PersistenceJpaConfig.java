@@ -8,6 +8,7 @@ import com.elicatari.dteissuer.application.port.out.IdempotencyStore;
 import com.elicatari.dteissuer.shared.DteMeters;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -17,6 +18,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
 @Import(DteMeters.class)
+@EnableConfigurationProperties(IdempotencyProperties.class)
 class PersistenceJpaConfig {
 
     @Bean

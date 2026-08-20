@@ -31,6 +31,10 @@
     <!-- Piso Grooming, forzado: rompe verify si baja. Aplica a domain + application. -->
     <jacoco.line.coverage.ratio>0.80</jacoco.line.coverage.ratio>
     <jacoco.branch.coverage.ratio>0.70</jacoco.branch.coverage.ratio>
+    <!-- Adapter: más bajo que el hexágono interno; no se excluye en silencio. -->
+    <jacoco.adapter.line.coverage.ratio>0.70</jacoco.adapter.line.coverage.ratio>
+    <jacoco.adapter.branch.coverage.ratio>0.40</jacoco.adapter.branch.coverage.ratio>
+    <pitest.mutation.threshold>70</pitest.mutation.threshold>
     <!-- Placeholder para que @{argLine} de Surefire no falle si JaCoCo aún no inyectó el agente. -->
     <argLine/>
   </properties>
@@ -181,9 +185,8 @@
         <version>${jacoco.version}</version>
         <configuration>
           <excludes>
-            <!-- Arranque y adapters: la cobertura se exige en domain y application. -->
+            <!-- Arranque y shared (filtros/JWT): el gate numérico es domain+application y adapter. -->
             <exclude>**/DteIssuerApplication.class</exclude>
-            <exclude>**/adapter/**</exclude>
             <exclude>**/shared/**</exclude>
           </excludes>
         </configuration>
@@ -202,12 +205,16 @@
             </goals>
           </execution>
           <execution>
-            <id>check-coverage</id>
+            <id>check-hexagon</id>
             <phase>verify</phase>
             <goals>
               <goal>check</goal>
             </goals>
             <configuration>
+              <includes>
+                <include>com/elicatari/dteissuer/domain/**</include>
+                <include>com/elicatari/dteissuer/application/**</include>
+              </includes>
               <rules>
                 <rule>
                   <element>BUNDLE</element>
@@ -227,13 +234,42 @@
               </rules>
             </configuration>
           </execution>
+          <execution>
+            <id>check-adapter</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>com/elicatari/dteissuer/adapter/**</include>
+              </includes>
+              <rules>
+                <rule>
+                  <element>BUNDLE</element>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>${jacoco.adapter.line.coverage.ratio}</minimum>
+                    </limit>
+                    <limit>
+                      <counter>BRANCH</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>${jacoco.adapter.branch.coverage.ratio}</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
     </plugins>
   </build>
 
   <profiles>
-    <!-- Job aparte: ./mvnw -Pmutation verify. No bloquea el PR. -->
+    <!-- Job aparte: ./mvnw -B -Pmutation verify. Umbral sobre domain; rompe ese job. -->
     <profile>
       <id>mutation</id>
       <build>
@@ -273,6 +309,7 @@
                 <param>**.*ArchTest</param>
                 <param>**.*PropertyTest</param>
               </excludedTestClasses>
+              <mutationThreshold>${pitest.mutation.threshold}</mutationThreshold>
               <outputFormats>
                 <outputFormat>XML</outputFormat>
                 <outputFormat>HTML</outputFormat>

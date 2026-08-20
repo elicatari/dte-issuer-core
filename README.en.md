@@ -66,6 +66,8 @@ Scope `(tenant_id, idempotency_key)` + hash of the canonicalized body. Required.
 
 The race is resolved by database uniqueness, not by a prior `if exists`.
 
+An in-progress reservation abandoned (`created_at` older than `dte.idempotency.in-progress-ttl-ms`, 60 s by default) can be claimed again: same body issues; a different body is still 409.
+
 ## Decisions
 
 | Topic | Decision |
@@ -77,7 +79,7 @@ The race is resolved by database uniqueness, not by a prior `if exists`.
 
 ## What is not guaranteed
 
-- **At-least-once.** Outbox in the same TX as the DTE. If Rabbit is down after commit, the poller retries. A possible resend is deduplicated with `eventId`. Not a saga and not a second process.
+- **At-least-once.** Outbox in the same TX as the DTE. If Rabbit is down after commit, the poller retries with backoff. A payload that always fails is buried (`dead_lettered_at`) and does not block later events. A possible resend is deduplicated with `eventId`. Not a saga and not a second process.
 - **SII is a stub.** One document type: Boleta 39. No signed XML.
 - Folio and document live in **this** database. Not a saga, not a distributed transaction.
 
@@ -97,7 +99,9 @@ token and `Idempotency-Key` are never logged in the clear.
 
 `/actuator/prometheus` requires a JWT (same as the HTTP contract). Business
 metrics: `dte_issued_total`, `dte_folio_reservation_seconds`,
-`dte_outbox_pending`, `dte_outbox_lag_seconds`.
+`dte_outbox_pending`, `dte_outbox_lag_seconds`,
+`dte_outbox_dead_lettered_total`. A dead outbox row does **not** mark
+`/actuator/health` DOWN.
 
 ## Stack
 
@@ -108,7 +112,8 @@ metrics: `dte_issued_total`, `dte_folio_reservation_seconds`,
 - Actuator: public health; authenticated Prometheus
 - PostgreSQL + Flyway, shared schema + `tenant_id` + RLS
 - RabbitMQ (outbox + publish `DteIssued` after commit)
-- ArchUnit, Testcontainers, jqwik; JaCoCo 80% lines / 70% branches enforced on domain + application
+- ArchUnit, Testcontainers, jqwik; JaCoCo 80% lines / 70% branches enforced on domain + application; `adapter/**` 70% / 40% (lower: more wiring branches). `shared/**` is out of the gate (JWT/MDC filters); the gate does not silently measure only the easy part.
+- PIT mutation on `domain` in CI (`./mvnw -B -Pmutation verify`, separate job on `main`, 70% threshold).
 
 ## How to run
 
@@ -116,6 +121,8 @@ metrics: `dte_issued_total`, `dte_folio_reservation_seconds`,
 cp .env.example .env
 docker compose up --build
 ```
+
+The `api` image does not run as root (`id -u` is 10001) and declares `HEALTHCHECK` in the Dockerfile (Compose still checks readiness the same way).
 
 When the API, Postgres, Keycloak and Rabbit are healthy (`dte-issued-echo` is a
 log/echo of `dte.issued`, not a second service):

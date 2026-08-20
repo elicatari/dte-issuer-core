@@ -38,7 +38,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
         classes = AfterCommitRabbitTestConfig.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
-        properties = "dte.outbox.poller.grace-ms=0")
+        properties = {
+            "dte.outbox.poller.grace-ms=0",
+            "dte.outbox.poller.max-attempts=3",
+            "dte.outbox.poller.initial-backoff-ms=0",
+            "dte.outbox.poller.max-backoff-ms=0"
+        })
 class DteIssuedAfterCommitTest extends AbstractJpaPostgresTest {
 
     private static final Rut RUT = Rut.parse("12.345.678-5");
@@ -121,12 +126,51 @@ class DteIssuedAfterCommitTest extends AbstractJpaPostgresTest {
         assertThat(unpublishedCount(tenant.value())).isZero();
     }
 
+    @Test
+    void persistentPublishFailureDeadLettersAndDoesNotBlockLaterEvent() throws SQLException {
+        TenantId poison = new TenantId("outbox-poison");
+        TenantId healthy = new TenantId("outbox-healthy");
+        insertFolioRange(dataSource, poison.value(), 1, 10);
+        insertFolioRange(dataSource, healthy.value(), 1, 10);
+
+        doThrow(new AmqpException("broker down"))
+                .when(rabbitTemplate)
+                .convertAndSend(eq(DteIssuedQueues.NAME), any(Object.class), any(MessagePostProcessor.class));
+
+        TenantContext.set(poison);
+        issueDte.execute(command(poison, "poison-1"));
+        for (int i = 0; i < 4; i++) {
+            publisher.publishUnpublished();
+        }
+        assertThat(deadLetteredCount(poison.value())).isEqualTo(1);
+        assertThat(unpublishedLiveCount(poison.value())).isZero();
+
+        reset(rabbitTemplate);
+        TenantContext.set(healthy);
+        issueDte.execute(command(healthy, "healthy-1"));
+
+        verify(rabbitTemplate)
+                .convertAndSend(eq(DteIssuedQueues.NAME), any(Object.class), any(MessagePostProcessor.class));
+        assertThat(unpublishedCount(healthy.value())).isZero();
+        assertThat(deadLetteredCount(poison.value())).isEqualTo(1);
+    }
+
     private long outboxCount(String tenantId) throws SQLException {
         return countOutbox(tenantId, "select count(*) from outbox");
     }
 
     private long unpublishedCount(String tenantId) throws SQLException {
         return countOutbox(tenantId, "select count(*) from outbox where published_at is null");
+    }
+
+    private long unpublishedLiveCount(String tenantId) throws SQLException {
+        return countOutbox(
+                tenantId,
+                "select count(*) from outbox where published_at is null and dead_lettered_at is null");
+    }
+
+    private long deadLetteredCount(String tenantId) throws SQLException {
+        return countOutbox(tenantId, "select count(*) from outbox where dead_lettered_at is not null");
     }
 
     private long countOutbox(String tenantId, String sql) throws SQLException {

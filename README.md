@@ -66,6 +66,8 @@ Scope `(tenant_id, idempotency_key)` + hash del body canonicalizado. Obligatorio
 
 La carrera se resuelve con la unicidad de la BD, no con un `if exists` previo.
 
+Una reserva en curso abandonada (`created_at` más viejo que `dte.idempotency.in-progress-ttl-ms`, 60 s por defecto) se puede reclamar otra vez: mismo body emite; body distinto sigue siendo 409.
+
 ## Decisiones
 
 | Tema | Decisión |
@@ -77,7 +79,7 @@ La carrera se resuelve con la unicidad de la BD, no con un `if exists` previo.
 
 ## Qué no está garantizado
 
-- **At-least-once.** Outbox en la misma TX que el DTE. Si Rabbit cae tras el commit, el poller reintenta. Un reenvío posible se deduplica con `eventId`. No es saga ni segundo proceso.
+- **At-least-once.** Outbox en la misma TX que el DTE. Si Rabbit cae tras el commit, el poller reintenta con backoff. Un payload que falla siempre se entierra (`dead_lettered_at`) y no bloquea al resto. Un reenvío posible se deduplica con `eventId`. No es saga ni segundo proceso.
 - **SII = stub.** Un solo tipo documental: Boleta 39. Sin XML firmado.
 - Folio y documento viven en **esta** base. No es saga ni transacción distribuida.
 
@@ -97,7 +99,8 @@ el token y el `Idempotency-Key` no se loguean en claro.
 
 `/actuator/prometheus` exige JWT (igual que el contrato HTTP). Métricas de negocio:
 `dte_issued_total`, `dte_folio_reservation_seconds`, `dte_outbox_pending`,
-`dte_outbox_lag_seconds`.
+`dte_outbox_lag_seconds`, `dte_outbox_dead_lettered_total`. Un muerto en el
+outbox **no** pone `/actuator/health` en DOWN.
 
 ## Stack
 
@@ -108,7 +111,8 @@ el token y el `Idempotency-Key` no se loguean en claro.
 - Actuator: health público; Prometheus autenticado
 - PostgreSQL + Flyway, schema compartido + `tenant_id` + RLS
 - RabbitMQ (outbox + publish `DteIssued` tras commit)
-- ArchUnit, Testcontainers, jqwik; JaCoCo 80% líneas / 70% ramas forzado sobre dominio + aplicación
+- ArchUnit, Testcontainers, jqwik; JaCoCo 80% líneas / 70% ramas forzado sobre dominio + aplicación; `adapter/**` 70% / 40% (más bajo: más ramas de wiring). `shared/**` queda fuera del umbral (filtros JWT/MDC); no es que el gate solo mida lo fácil sin decirlo.
+- Mutación PIT sobre `domain` en CI (`./mvnw -B -Pmutation verify`, job aparte en `main`, umbral 70%).
 
 ## Cómo levantar
 
@@ -116,6 +120,8 @@ el token y el `Idempotency-Key` no se loguean en claro.
 cp .env.example .env
 docker compose up --build
 ```
+
+La imagen de `api` no corre como root (`id -u` es 10001) y declara `HEALTHCHECK` en el Dockerfile (Compose sigue comprobando readiness igual).
 
 Cuando API, Postgres, Keycloak y Rabbit están healthy (`dte-issued-echo` es
 log/echo de `dte.issued`, no un segundo servicio):

@@ -10,6 +10,8 @@ import java.util.UUID;
  *
  * <p>La carrera no se resuelve con un {@code if exists} previo: {@link #tryClaim}
  * intenta insertar; si la unicidad choca, devuelve el registro ya guardado.
+ * Una reserva en curso abandonada (adapter: TTL sobre {@code created_at}) se
+ * reclama en el mismo {@code INSERT ... ON CONFLICT}.
  */
 public interface IdempotencyStore {
 
