@@ -15,6 +15,8 @@ import java.util.UUID;
 @Table(name = "outbox")
 class OutboxEntity {
 
+    private static final int LAST_ERROR_MAX = 2_000;
+
     @Id
     private UUID id;
 
@@ -36,6 +38,18 @@ class OutboxEntity {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    @Column(nullable = false)
+    private int attempts;
+
+    @Column(name = "next_attempt_at", nullable = false)
+    private Instant nextAttemptAt;
+
+    @Column(name = "last_error")
+    private String lastError;
+
+    @Column(name = "dead_lettered_at")
+    private Instant deadLetteredAt;
+
     protected OutboxEntity() {}
 
     OutboxEntity(
@@ -51,6 +65,8 @@ class OutboxEntity {
         this.eventVersion = eventVersion;
         this.payload = payload;
         this.occurredAt = occurredAt;
+        this.attempts = 0;
+        this.nextAttemptAt = occurredAt;
     }
 
     UUID id() {
@@ -81,7 +97,40 @@ class OutboxEntity {
         return publishedAt;
     }
 
+    int attempts() {
+        return attempts;
+    }
+
+    Instant deadLetteredAt() {
+        return deadLetteredAt;
+    }
+
     void markPublished(Instant publishedAt) {
         this.publishedAt = publishedAt;
+    }
+
+    /**
+     * @return {@code true} si la fila queda muerta y el poller no la vuelve a tomar
+     */
+    boolean recordFailure(Instant now, String error, int maxAttempts, Instant nextAttempt) {
+        this.attempts = this.attempts + 1;
+        this.lastError = truncate(error);
+        if (this.attempts >= maxAttempts) {
+            this.deadLetteredAt = now;
+            return true;
+        }
+        this.nextAttemptAt = nextAttempt;
+        return false;
+    }
+
+    static String truncate(String error) {
+        if (error == null || error.isBlank()) {
+            return "unknown";
+        }
+        String trimmed = error.strip();
+        if (trimmed.length() <= LAST_ERROR_MAX) {
+            return trimmed;
+        }
+        return trimmed.substring(0, LAST_ERROR_MAX);
     }
 }

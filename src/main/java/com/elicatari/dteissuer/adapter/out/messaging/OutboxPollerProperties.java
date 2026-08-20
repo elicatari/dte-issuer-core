@@ -13,4 +13,7 @@ import org.springframework.validation.annotation.Validated;
 public record OutboxPollerProperties(
         @DefaultValue("2000") @Min(1) long delayMs,
         @DefaultValue("2000") @Min(0) long graceMs,
-        @DefaultValue("50") @Min(1) int batchSize) {}
+        @DefaultValue("50") @Min(1) int batchSize,
+        @DefaultValue("8") @Min(1) int maxAttempts,
+        @DefaultValue("2000") @Min(0) long initialBackoffMs,
+        @DefaultValue("60000") @Min(0) long maxBackoffMs) {}

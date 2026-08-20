@@ -224,6 +224,24 @@ class FlywayV1Test {
                 .isEqualTo("42501");
     }
 
+    @Test
+    void v4OutboxRetryColumnsExist() throws SQLException {
+        try (Connection connection = app();
+                PreparedStatement statement =
+                        connection.prepareStatement("select column_name from information_schema.columns "
+                                + "where table_name = 'outbox' order by column_name");
+                ResultSet result = statement.executeQuery()) {
+            assertThat(columnValues(result, 1))
+                    .contains(
+                            "attempts",
+                            "dead_lettered_at",
+                            "last_error",
+                            "next_attempt_at",
+                            "occurred_at",
+                            "published_at");
+        }
+    }
+
     private static UUID insertDte(String tenantId, long folio) throws SQLException {
         UUID id = UUID.randomUUID();
         try (Connection connection = app()) {

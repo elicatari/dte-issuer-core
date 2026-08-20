@@ -65,3 +65,6 @@ dte:
       delay-ms: 2000
       grace-ms: 2000
       batch-size: 50
+      max-attempts: 8
+      initial-backoff-ms: 2000
+      max-backoff-ms: 60000

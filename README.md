@@ -77,7 +77,7 @@ La carrera se resuelve con la unicidad de la BD, no con un `if exists` previo.
 
 ## Qué no está garantizado
 
-- **At-least-once.** Outbox en la misma TX que el DTE. Si Rabbit cae tras el commit, el poller reintenta. Un reenvío posible se deduplica con `eventId`. No es saga ni segundo proceso.
+- **At-least-once.** Outbox en la misma TX que el DTE. Si Rabbit cae tras el commit, el poller reintenta con backoff. Un payload que falla siempre se entierra (`dead_lettered_at`) y no bloquea al resto. Un reenvío posible se deduplica con `eventId`. No es saga ni segundo proceso.
 - **SII = stub.** Un solo tipo documental: Boleta 39. Sin XML firmado.
 - Folio y documento viven en **esta** base. No es saga ni transacción distribuida.
 
@@ -97,7 +97,8 @@ el token y el `Idempotency-Key` no se loguean en claro.
 
 `/actuator/prometheus` exige JWT (igual que el contrato HTTP). Métricas de negocio:
 `dte_issued_total`, `dte_folio_reservation_seconds`, `dte_outbox_pending`,
-`dte_outbox_lag_seconds`.
+`dte_outbox_lag_seconds`, `dte_outbox_dead_lettered_total`. Un muerto en el
+outbox **no** pone `/actuator/health` en DOWN.
 
 ## Stack
 

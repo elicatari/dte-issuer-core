@@ -16,6 +16,7 @@ public class DteMeters {
     public static final String FOLIO_RESERVATION = "dte.folio.reservation";
     public static final String OUTBOX_PENDING = "dte.outbox.pending";
     public static final String OUTBOX_LAG = "dte.outbox.lag";
+    public static final String OUTBOX_DEAD_LETTERED = "dte.outbox.deadLettered";
 
     public static final String TAG_TENANT_ID = "tenant_id";
     public static final String TAG_DOCUMENT_TYPE = "document_type";
@@ -44,5 +45,12 @@ public class DteMeters {
                 .description("Espera del lock pesimista del rango de folio")
                 .tag(TAG_TENANT_ID, tenantId.value())
                 .register(registry));
+    }
+
+    public void recordDeadLettered() {
+        Counter.builder(OUTBOX_DEAD_LETTERED)
+                .description("Eventos de outbox enterrados tras agotar reintentos")
+                .register(registry)
+                .increment();
     }
 }

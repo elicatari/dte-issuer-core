@@ -77,7 +77,7 @@ The race is resolved by database uniqueness, not by a prior `if exists`.
 
 ## What is not guaranteed
 
-- **At-least-once.** Outbox in the same TX as the DTE. If Rabbit is down after commit, the poller retries. A possible resend is deduplicated with `eventId`. Not a saga and not a second process.
+- **At-least-once.** Outbox in the same TX as the DTE. If Rabbit is down after commit, the poller retries with backoff. A payload that always fails is buried (`dead_lettered_at`) and does not block later events. A possible resend is deduplicated with `eventId`. Not a saga and not a second process.
 - **SII is a stub.** One document type: Boleta 39. No signed XML.
 - Folio and document live in **this** database. Not a saga, not a distributed transaction.
 
@@ -97,7 +97,9 @@ token and `Idempotency-Key` are never logged in the clear.
 
 `/actuator/prometheus` requires a JWT (same as the HTTP contract). Business
 metrics: `dte_issued_total`, `dte_folio_reservation_seconds`,
-`dte_outbox_pending`, `dte_outbox_lag_seconds`.
+`dte_outbox_pending`, `dte_outbox_lag_seconds`,
+`dte_outbox_dead_lettered_total`. A dead outbox row does **not** mark
+`/actuator/health` DOWN.
 
 ## Stack
 
