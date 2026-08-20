@@ -26,6 +26,8 @@
     <jacoco.version>0.8.12</jacoco.version>
     <pitest.version>1.17.4</pitest.version>
     <pitest.junit5.version>1.2.3</pitest.junit5.version>
+    <!-- 3.1.x está construido contra Boot 4.1; 3.0.x es para 4.0.x. -->
+    <springdoc.version>3.1.0</springdoc.version>
     <!-- Piso Grooming, forzado: rompe verify si baja. Aplica a domain + application. -->
     <jacoco.line.coverage.ratio>0.80</jacoco.line.coverage.ratio>
     <jacoco.branch.coverage.ratio>0.70</jacoco.branch.coverage.ratio>
@@ -45,6 +47,10 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -84,6 +90,11 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-configuration-processor</artifactId>
       <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
     </dependency>
 
     <dependency>

@@ -4,6 +4,7 @@ import com.elicatari.dteissuer.domain.DteIssued;
 import jakarta.persistence.EntityManager;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -37,6 +38,41 @@ public class JpaOutboxStore {
                 payload,
                 event.occurredAt()));
         entityManager.flush();
+    }
+
+    /**
+     * Mismas filas que reclama el poller. JDBC propio y {@code app.outbox_relay}
+     * local a esta TX: no hereda ni deja {@code app.tenant_id} en el pool.
+     */
+    public OutboxPendingStats unpublishedStats(Instant cutoff) {
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                TenantRls.bindRelay(connection);
+                try (PreparedStatement statement = connection.prepareStatement(
+                        """
+                        select count(*) as pending_count, min(occurred_at) as oldest
+                        from outbox
+                        where published_at is null
+                          and occurred_at < ?
+                        """)) {
+                    statement.setTimestamp(1, Timestamp.from(cutoff));
+                    try (ResultSet result = statement.executeQuery()) {
+                        result.next();
+                        long count = result.getLong("pending_count");
+                        Timestamp oldest = result.getTimestamp("oldest");
+                        connection.commit();
+                        return new OutboxPendingStats(
+                                count, oldest == null ? null : oldest.toInstant());
+                    }
+                }
+            } catch (SQLException ex) {
+                connection.rollback();
+                throw ex;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("no se pudo leer outbox pendiente", ex);
+        }
     }
 
     public List<OutboxRecord> claimUnpublishedBatch(Instant cutoff, int batchSize) {

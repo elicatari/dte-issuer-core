@@ -1,12 +1,14 @@
 package com.elicatari.dteissuer.adapter.in;
 
 import com.elicatari.dteissuer.domain.Dte;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
 
 /**
  * Representación HTTP de una Boleta 39 emitida. IVA y total los calculó el dominio.
  */
+@Schema(description = "Boleta 39 emitida. IVA y total los calculó el dominio.")
 public record DteResponse(
         UUID id,
         String tenantId,

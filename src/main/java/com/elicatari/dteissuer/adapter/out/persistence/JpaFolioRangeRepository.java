@@ -3,6 +3,8 @@ package com.elicatari.dteissuer.adapter.out.persistence;
 import com.elicatari.dteissuer.application.port.out.FolioRangeRepository;
 import com.elicatari.dteissuer.domain.FolioRange;
 import com.elicatari.dteissuer.domain.TenantId;
+import com.elicatari.dteissuer.shared.DteMeters;
+import io.micrometer.core.instrument.Timer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
@@ -16,6 +18,12 @@ class JpaFolioRangeRepository implements FolioRangeRepository {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    private final DteMeters meters;
+
+    JpaFolioRangeRepository(DteMeters meters) {
+        this.meters = meters;
+    }
 
     /**
      * Carga el rango con {@code SELECT ... FOR UPDATE}. Serializa por tenant:
@@ -45,13 +53,19 @@ class JpaFolioRangeRepository implements FolioRangeRepository {
     }
 
     private FolioRangeEntity lockRange(TenantId tenantId) {
-        List<FolioRangeEntity> rows = entityManager
-                .createQuery(
-                        "select f from FolioRangeEntity f where f.tenantId = :tenantId", FolioRangeEntity.class)
-                .setParameter("tenantId", tenantId.value())
-                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
-                .setHint("jakarta.persistence.lock.timeout", 5_000)
-                .getResultList();
-        return rows.isEmpty() ? null : rows.getFirst();
+        Timer.Sample sample = meters.startFolioReservation();
+        try {
+            List<FolioRangeEntity> rows = entityManager
+                    .createQuery(
+                            "select f from FolioRangeEntity f where f.tenantId = :tenantId",
+                            FolioRangeEntity.class)
+                    .setParameter("tenantId", tenantId.value())
+                    .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                    .setHint("jakarta.persistence.lock.timeout", 5_000)
+                    .getResultList();
+            return rows.isEmpty() ? null : rows.getFirst();
+        } finally {
+            meters.stopFolioReservation(sample, tenantId);
+        }
     }
 }

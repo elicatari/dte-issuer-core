@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,6 +22,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +45,46 @@ class DteHttpTest extends AbstractJpaPostgresTest {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
+
+    @Test
+    void postIncrementsIssuedCounterForTenantAndReplayDoesNot() throws Exception {
+        String tenant = "metrics-alpha";
+        insertFolioRange(dataSource, tenant, 1, 8);
+
+        mockMvc.perform(post("/api/v1/dte")
+                        .with(jwt().jwt(jwt -> jwt.claim("tenant_id", tenant)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "metrics-1")
+                        .content(BODY))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/v1/dte")
+                        .with(jwt().jwt(jwt -> jwt.claim("tenant_id", tenant)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "metrics-1")
+                        .content(BODY))
+                .andExpect(status().isCreated());
+
+        Counter issued = meterRegistry
+                .find("dte.issued")
+                .tag("tenant_id", tenant)
+                .tag("document_type", "BOLETA_39")
+                .counter();
+        assertThat(issued).isNotNull();
+        assertThat(issued.count()).isEqualTo(1);
+        assertThat(meterRegistry.find("dte.issued").tag("tenant_id", "beta").counter()).isNull();
+    }
+
+    @Test
+    void prometheusRequiresJwt() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus")).andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/actuator/prometheus").with(jwt().jwt(jwt -> jwt.claim("tenant_id", "alpha"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("jvm_")));
+    }
 
     @Test
     void postAlphaThenReplaySameKeyKeepsFolio() throws Exception {

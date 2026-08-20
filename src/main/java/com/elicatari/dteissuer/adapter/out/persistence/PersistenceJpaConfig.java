@@ -5,15 +5,18 @@ import com.elicatari.dteissuer.application.port.out.DomainEventPublisher;
 import com.elicatari.dteissuer.application.port.out.DteRepository;
 import com.elicatari.dteissuer.application.port.out.FolioRangeRepository;
 import com.elicatari.dteissuer.application.port.out.IdempotencyStore;
+import com.elicatari.dteissuer.shared.DteMeters;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionExecutionListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
+@Import(DteMeters.class)
 class PersistenceJpaConfig {
 
     @Bean

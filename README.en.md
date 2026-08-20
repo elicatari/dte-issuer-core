@@ -26,24 +26,6 @@ Keycloak login (JWT with tenant_id)
 That is not an `INSERT`. It is folio as a scarce resource, no duplicate on POS retry, and
 Alpha does not use Beta’s folios or see Beta’s documents.
 
-## Why this repo (not a fifth product)
-
-The public samples already cover something else. Hexagonal design, ArchUnit,
-idempotency and concurrency are **not** new here:
-[`grooming-scheduler-api`](https://github.com/elicatari/grooming-scheduler-api)
-already shows them. This repo matches that floor (JaCoCo 80/70 **enforced**, jqwik,
-ArchUnit on the port) and closes what **no** sample covers: **Keycloak as an external
-IdP**, **multi-tenancy with RLS**, **event after commit to RabbitMQ**, and **real
-output ports** (not `*Api` facades over `JpaRepository`).
-
-| Sample | What it shows | What it does not |
-|--------|----------------|------------------|
-| [`automotive-erp-core-api`](https://github.com/elicatari/automotive-erp-core-api) | Homegrown JWT, modular monolith | External IdP, multi-tenant, events |
-| [`warehouse-wms-core-api`](https://github.com/elicatari/warehouse-wms-core-api) | FEFO, DRAFT → CONFIRMED documents | Multi-tenant, messaging |
-| [`grooming-scheduler-api`](https://github.com/elicatari/grooming-scheduler-api) | Pure domain, concurrency, idempotency, ArchUnit | Keycloak, multi-tenant, messaging |
-
-On the site ([elicatari.com](https://elicatari.com)) it occupies the CoreTenant slot.
-
 ## Eight files
 
 | # | File | What it shows |
@@ -102,15 +84,28 @@ The race is resolved by database uniqueness, not by a prior `if exists`.
 ## How to debug
 
 Every authenticated request puts `tenant_id` and `X-Request-Id` in the MDC (the
-correlation id is echoed on the response). “What did Beta do?”: filter by
-`tenant_id=beta` and `request_id`. RUT is masked; the token and `Idempotency-Key`
-are never logged in the clear.
+correlation id is echoed on the response). Console logs are ECS JSON; MDC fields
+(`tenant_id`, `request_id`) are JSON properties, not embedded text. “What did
+Beta do?”:
+
+```bash
+docker compose logs api | jq 'select(.tenant_id=="beta")'
+```
+
+Plain text while developing: `--spring.profiles.active=local`. RUT is masked; the
+token and `Idempotency-Key` are never logged in the clear.
+
+`/actuator/prometheus` requires a JWT (same as the HTTP contract). Business
+metrics: `dte_issued_total`, `dte_folio_reservation_seconds`,
+`dte_outbox_pending`, `dte_outbox_lag_seconds`.
 
 ## Stack
 
 - Java 21, Spring Boot 4, Maven (`./mvnw -B verify` in [CI](https://github.com/elicatari/dte-issuer-core/actions/workflows/ci.yml))
 - Hexagonal + tactical DDD (no Lombok or JPA in `domain`)
 - Spring Security OAuth2 Resource Server (Keycloak)
+- Generated OpenAPI (`/v3/api-docs`, `/swagger-ui.html`; JWT required, same as the rest)
+- Actuator: public health; authenticated Prometheus
 - PostgreSQL + Flyway, shared schema + `tenant_id` + RLS
 - RabbitMQ (outbox + publish `DteIssued` after commit)
 - ArchUnit, Testcontainers, jqwik; JaCoCo 80% lines / 70% branches enforced on domain + application
@@ -148,6 +143,8 @@ The client does **not** send tenant in a header: it comes from the claim.
 # Ready: 200. Anything else, without a token: 401.
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/actuator/health/readiness
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/dte
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/v3/api-docs
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/actuator/prometheus
 ```
 
 Password grant is demo-only. The client is public with PKCE for a future SPA.
@@ -203,13 +200,6 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 Inventory / FEFO, scheduling / slot locks, an audit worker as a second domain,
 Gateway, Eureka, Kubernetes, real certificate-signed XML, AI chat.
-
-## How to talk about it
-
-> DTE issuance microservice (Chile). One deploy, one database, HTTP contract for POS/ERP.
-> Keycloak, hexagonal, event after commit to RabbitMQ. The rest of the SaaS lives in other systems.
-
-Not: “a microservices architecture”.
 
 ## License / intent
 

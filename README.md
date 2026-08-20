@@ -26,23 +26,6 @@ Login Keycloak (JWT con tenant_id)
 Eso no es un `INSERT`. Es folio como recurso escaso, no duplicar si el POS reintenta, y
 Alpha no usa los folios ni ve los documentos de Beta.
 
-## Por qué este repo (y no un quinto producto)
-
-Los samples públicos ya cubren otra cosa. Hexagonal, ArchUnit, idempotencia y
-concurrencia **no** son novedad aquí: [`grooming-scheduler-api`](https://github.com/elicatari/grooming-scheduler-api)
-ya los muestra. Este repo iguala ese piso (JaCoCo 80/70 **forzado**, jqwik, ArchUnit
-del puerto) y cierra lo que **ningún** sample toca: **Keycloak como IdP externo**,
-**multi-tenancy con RLS**, **evento tras commit a RabbitMQ** y **puertos de salida
-propios** (no fachadas `*Api` sobre `JpaRepository`).
-
-| Sample | Qué demuestra | Qué no |
-|--------|----------------|--------|
-| [`automotive-erp-core-api`](https://github.com/elicatari/automotive-erp-core-api) | JWT propio, monolito modular | IdP externo, multi-tenant, eventos |
-| [`warehouse-wms-core-api`](https://github.com/elicatari/warehouse-wms-core-api) | FEFO, documentos DRAFT → CONFIRMADO | Multi-tenant, mensajería |
-| [`grooming-scheduler-api`](https://github.com/elicatari/grooming-scheduler-api) | Dominio puro, concurrencia, idempotencia, ArchUnit | Keycloak, multi-tenant, mensajería |
-
-En el sitio ([elicatari.com](https://elicatari.com)) ocupa el lugar de CoreTenant.
-
 ## Ocho archivos
 
 | # | Archivo | Qué demuestra |
@@ -101,15 +84,28 @@ La carrera se resuelve con la unicidad de la BD, no con un `if exists` previo.
 ## Cómo se depura
 
 Cada petición autenticada lleva `tenant_id` y `X-Request-Id` en el MDC (y el id de
-correlación vuelve en la respuesta). Pregunta “¿qué hizo Beta?”: filtrar por
-`tenant_id=beta` y el `request_id`. El RUT va enmascarado; el token y el
-`Idempotency-Key` no se loguean en claro.
+correlación vuelve en la respuesta). Los logs de consola salen en JSON ECS; el MDC
+viaja como campos (`tenant_id`, `request_id`), no como texto embebido. Pregunta
+“¿qué hizo Beta?”:
+
+```bash
+docker compose logs api | jq 'select(.tenant_id=="beta")'
+```
+
+Texto plano al desarrollar: `--spring.profiles.active=local`. El RUT va enmascarado;
+el token y el `Idempotency-Key` no se loguean en claro.
+
+`/actuator/prometheus` exige JWT (igual que el contrato HTTP). Métricas de negocio:
+`dte_issued_total`, `dte_folio_reservation_seconds`, `dte_outbox_pending`,
+`dte_outbox_lag_seconds`.
 
 ## Stack
 
 - Java 21, Spring Boot 4, Maven (`./mvnw -B verify` en [CI](https://github.com/elicatari/dte-issuer-core/actions/workflows/ci.yml))
 - Hexagonal + DDD táctico (sin Lombok ni JPA en `domain`)
 - Spring Security OAuth2 Resource Server (Keycloak)
+- OpenAPI generado (`/v3/api-docs`, `/swagger-ui.html`; JWT obligatorio, igual que el resto)
+- Actuator: health público; Prometheus autenticado
 - PostgreSQL + Flyway, schema compartido + `tenant_id` + RLS
 - RabbitMQ (outbox + publish `DteIssued` tras commit)
 - ArchUnit, Testcontainers, jqwik; JaCoCo 80% líneas / 70% ramas forzado sobre dominio + aplicación
@@ -147,6 +143,8 @@ El cliente **no** manda el tenant en un header: sale del claim.
 # Listo: 200. El resto, sin token, 401.
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/actuator/health/readiness
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/dte
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/v3/api-docs
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/actuator/prometheus
 ```
 
 Password grant es solo para la demo. El cliente es público con PKCE para una SPA futura.
@@ -202,13 +200,6 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 Inventario / FEFO, agenda / locks de horario, worker de auditoría como segundo dominio,
 Gateway, Eureka, Kubernetes, XML firmado con certificado real, chat de IA.
-
-## Cómo hablarlo
-
-> Microservicio de emisión DTE (Chile). Un despliegue, una base, contrato HTTP para POS/ERP.
-> Keycloak, hexagonal, evento tras commit a RabbitMQ. El resto del SaaS vive en otros sistemas.
-
-No: “arquitectura de microservicios”.
 
 ## Licencia / intención
 

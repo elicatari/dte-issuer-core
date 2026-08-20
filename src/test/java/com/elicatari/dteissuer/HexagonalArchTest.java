@@ -30,10 +30,14 @@ class HexagonalArchTest {
                     "com.rabbitmq..",
                     "org.keycloak..",
                     "lombok..",
+                    "org.springdoc..",
+                    "io.swagger..",
+                    "io.micrometer..",
+                    "io.prometheus..",
                     "..adapter..",
                     "..application..",
                     "..shared..")
-            .because("el dominio es Java puro: sin Spring, JPA, Rabbit, Keycloak ni adapters");
+            .because("el dominio es Java puro: sin Spring, JPA, Rabbit, Keycloak, OpenAPI ni adapters");
 
     @ArchTest
     static final ArchRule applicationDoesNotDependOnAdaptersOrPersistence = noClasses()

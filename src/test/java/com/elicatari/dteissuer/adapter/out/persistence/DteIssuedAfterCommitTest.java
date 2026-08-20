@@ -22,6 +22,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,9 @@ class DteIssuedAfterCommitTest extends AbstractJpaPostgresTest {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private JpaOutboxStore outboxStore;
 
     @AfterEach
     void clearTenant() {
@@ -107,6 +111,7 @@ class DteIssuedAfterCommitTest extends AbstractJpaPostgresTest {
         verify(rabbitTemplate)
                 .convertAndSend(eq(DteIssuedQueues.NAME), any(Object.class), any(MessagePostProcessor.class));
         assertThat(unpublishedCount(tenant.value())).isEqualTo(1);
+        assertThat(outboxStore.unpublishedStats(Instant.now().plusSeconds(5)).count()).isGreaterThanOrEqualTo(1);
 
         reset(rabbitTemplate);
         publisher.publishUnpublished();
