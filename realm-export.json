@@ -1,0 +1,101 @@
+{
+  "id": "dte",
+  "realm": "dte",
+  "displayName": "DTE Issuer",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "user",
+        "description": "Rol único de la demo"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "dte-demo",
+      "name": "DTE demo (público PKCE)",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": true,
+      "rootUrl": "http://localhost:8080",
+      "redirectUris": ["http://localhost:*", "http://127.0.0.1:*"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "tenant_id",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "user_alpha",
+      "email": "user.alpha@example.com",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Alpha",
+      "lastName": "Demo",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "change-me",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["user"],
+      "attributes": {
+        "tenant_id": ["alpha"]
+      }
+    },
+    {
+      "username": "user_beta",
+      "email": "user.beta@example.com",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Beta",
+      "lastName": "Demo",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "change-me",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["user"],
+      "attributes": {
+        "tenant_id": ["beta"]
+      }
+    }
+  ]
+}

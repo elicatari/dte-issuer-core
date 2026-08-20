@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: dte-issuer
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/dte_issuer}
+    username: ${SPRING_DATASOURCE_USERNAME:${DTE_APP_USER:dte_app}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DTE_APP_PASSWORD:change-me-app}}
+  flyway:
+    enabled: true
+    user: ${SPRING_FLYWAY_USER:dte}
+    password: ${SPRING_FLYWAY_PASSWORD:change-me}
+    locations: classpath:db/migration
+    placeholders:
+      "[dte_app_role]": ${DTE_APP_USER:dte_app}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          "[time_zone]": UTC
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:dte}
+    password: ${SPRING_RABBITMQ_PASSWORD:change-me}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://localhost:8081/realms/dte}
+          jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:http://localhost:8081/realms/dte/protocol/openid-connect/certs}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] tenant_id=%X{tenant_id:-} request_id=%X{request_id:-} %logger{36} - %msg%n"
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+dte:
+  outbox:
+    poller:
+      delay-ms: 2000
+      grace-ms: 2000
+      batch-size: 50
